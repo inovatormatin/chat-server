@@ -16,7 +16,7 @@ process.on("uncaughtException", (err) => {
 
 // Database URL
 // const DB = process.env.DB_URI.replace("<PASSWORD>", process.env.DB_PASSWORD);
-const DB = "mongodb://0.0.0.0:27017"; // loacal DB
+const DB = "mongodb://localhost:27017/chat_server"; // loacal DB
 
 // Connecting mongoDB.
 mongoose

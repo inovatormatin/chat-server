@@ -11,6 +11,8 @@ const xss = require("xss"); // sanitize untrusted HTML we might get as input in 
 const bodyParser = require("body-parser"); // to convert data received from user into json.
 const cors = require("cors"); // allow cors origin
 
+const routes = require("./routes"); // routes
+
 const app = express();
 
 //
@@ -41,7 +43,8 @@ const limiter = rateLimit({
   message: "Too many request from this IP, Please try again in an hour",
 });
 
-//
+// Routes
 app.use("/twak", limiter);
+app.use(routes);
 
 module.exports = app;

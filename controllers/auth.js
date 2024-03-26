@@ -291,6 +291,6 @@ exports.protect = async (req, res, next) => {
   }
 
   // If everything is fine - pass to next middleware
-  req.user = userDoc;
+  req.userDoc = userDoc;
   next();
 };
