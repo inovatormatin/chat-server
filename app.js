@@ -44,7 +44,7 @@ const limiter = rateLimit({
 });
 
 // Routes
-app.use("/twak", limiter);
+app.use("/chat_app", limiter);
 app.use(routes);
 
 module.exports = app;

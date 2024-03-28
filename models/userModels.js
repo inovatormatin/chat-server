@@ -56,7 +56,7 @@ const userSchema = new mongoose.Schema({
     default: false,
   },
   otp: {
-    type: Number,
+    type: String,
   },
   otp_expiry_time: {
     type: Date,
@@ -64,19 +64,22 @@ const userSchema = new mongoose.Schema({
 });
 
 // Mongoose Hooks
-userSchema.pre("save", function (next) {
+userSchema.pre("save", async function (next) {
   // Run this condition when there is change in OTP other wise pass to next controller.
-  if (!this.isModified("otp")) return next();
-  // Hash the OTP at cost of 12.
-  this.otp = bcrypt.hash(this.otp, 12);
+  if (this.isModified("otp")) {
+    // Hash the OTP at cost of 12.
+    this.otp = await bcrypt.hash(this.otp, 12);
+    console.log("here:", this.otp);
+  }
   next();
 }); // bcrypt OTP.
 
-userSchema.pre("save", function (next) {
+userSchema.pre("save", async function (next) {
   // Run this condition when there is change in password other wise pass to next controller.
-  if (!this.isModified("password")) return next();
-  // Hash the password at cost of 12.
-  this.password = bcrypt.hash(this.password, 12);
+  if (this.isModified("password")) {
+    // Hash the password at cost of 12.
+    this.password = await bcrypt.hash(this.password, 12);
+  }
   next();
 }); // bcrypt password.
 

@@ -1,7 +1,7 @@
 const jwt = require("jsonwebtoken");
 const otpGenerator = require("otp-generator");
 const crypto = require("crypto");
-const filterObject = require("../utils/filterObj");
+const { filterObject } = require("../utils/filterObj");
 const User = require("../models/userModels");
 const { promisify } = require("util");
 
@@ -17,7 +17,8 @@ exports.register = async (req, res, next) => {
     req.body,
     "firstName",
     "lastName",
-    "password"
+    "password",
+    "email"
   );
 
   // checking wether user already exists.
@@ -34,7 +35,6 @@ exports.register = async (req, res, next) => {
       new: true,
       validateModifiedOnly: true,
     });
-
     // generate OTP send email to user
     req.userId = existing_user._id;
     next(); // here next is the middleware we are going to recieve from parameters of function
@@ -51,7 +51,7 @@ exports.register = async (req, res, next) => {
     const new_user = await User.create(filteredBody);
 
     // generate OTP send email to user
-    req.new_user = existing_user._id;
+    req.userId = new_user._id;
     next();
   }
 };
@@ -107,18 +107,26 @@ exports.sendOTP = async (req, res, next) => {
 
   const otp_expiry_time = Date.now() + 3 * 60 * 1000; // 3 minutes expiry time
 
-  await findByIdAndUpdate(userId, {
+  const userDoc = await User.findByIdAndUpdate(userId, {
     otp: new_otp,
     otp_expiry_time: otp_expiry_time,
   });
 
   // TODO - Send Email
-
-  res.status(200).json({
-    status: "success",
-    message: "OTP sent successfully !",
-  });
-  return;
+  userDoc.otp = new_otp.toString();
+  if (userDoc) {
+    res.status(200).json({
+      status: "success",
+      message: "OTP sent successfully !",
+    });
+    return;
+  } else {
+    res.status(400).json({
+      status: "error",
+      message: "Something went wrong !",
+    });
+    return;
+  }
 };
 
 // Verify the OTP
