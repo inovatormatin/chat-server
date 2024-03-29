@@ -4,6 +4,8 @@ const crypto = require("crypto");
 const { filterObject } = require("../utils/filterObj");
 const User = require("../models/userModels");
 const { promisify } = require("util");
+const bcrypt = require("bcryptjs");
+const { validationResult } = require("express-validator");
 
 const signToken = (userId) => jwt.sign({ userId }, process.env.JWT_SECRET);
 
@@ -11,18 +13,30 @@ const signToken = (userId) => jwt.sign({ userId }, process.env.JWT_SECRET);
 
 // register new user
 exports.register = async (req, res, next) => {
-  const { firstName, lastName, email, password } = req.body;
-
+  // validation Check
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      status: "error",
+      message: errors.array()[0].msg,
+    });
+  }
+  const { firstName, lastName, password, email } = req.body;
   const filteredBody = filterObject(
-    req.body,
+    {
+      firstName,
+      lastName,
+      email,
+      password: await bcrypt.hash(password, 12), // Hash the Password at cost of 12.
+    },
     "firstName",
     "lastName",
-    "password",
-    "email"
+    "email",
+    "password"
   );
 
   // checking wether user already exists.
-  const existing_user = await User.findOne({ email: email });
+  const existing_user = await User.findOne({ email: req.body.email });
 
   if (existing_user && existing_user.verified) {
     res.status(400).json({
@@ -31,7 +45,7 @@ exports.register = async (req, res, next) => {
     });
     return;
   } else if (existing_user) {
-    await User.findOneAndUpdate({ email: email }, filteredBody, {
+    await User.findOneAndUpdate({ email: req.body.email }, filteredBody, {
       new: true,
       validateModifiedOnly: true,
     });
@@ -58,15 +72,16 @@ exports.register = async (req, res, next) => {
 
 // user login
 exports.login = async (req, res, next) => {
-  const { email, password } = req.body;
-  //   checking we get both inputs.
-  if (!email || !password) {
-    res.status(400).json({
+  // validation Check
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
       status: "error",
-      message: "Both email and password are required.",
+      message: errors.array()[0].msg,
     });
-    return;
   }
+
+  const { email, password } = req.body;
 
   // Find the user
   const userDoc = await User.findOne({ email: email }).select("+password");
@@ -98,6 +113,14 @@ exports.login = async (req, res, next) => {
 
 // Send OTP
 exports.sendOTP = async (req, res, next) => {
+  // validation Check
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      status: "error",
+      message: errors.array()[0].msg,
+    });
+  }
   const { userId } = req;
   const new_otp = otpGenerator.generate(6, {
     lowerCaseAlphabets: false,
@@ -108,12 +131,12 @@ exports.sendOTP = async (req, res, next) => {
   const otp_expiry_time = Date.now() + 3 * 60 * 1000; // 3 minutes expiry time
 
   const userDoc = await User.findByIdAndUpdate(userId, {
-    otp: new_otp,
+    otp: await bcrypt.hash(new_otp, 12), // Hash the OTP at cost of 12.
     otp_expiry_time: otp_expiry_time,
   });
 
   // TODO - Send Email
-  userDoc.otp = new_otp.toString();
+
   if (userDoc) {
     res.status(200).json({
       status: "success",
@@ -131,6 +154,15 @@ exports.sendOTP = async (req, res, next) => {
 
 // Verify the OTP
 exports.verifyOTP = async (req, res, next) => {
+  // validation Check
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      status: "error",
+      message: errors.array()[0].msg,
+    });
+  }
+  
   const { email, otp } = req.body;
 
   const userDoc = await User.findOne({
@@ -148,7 +180,8 @@ exports.verifyOTP = async (req, res, next) => {
   }
 
   // For inccorect OTP
-  if (!(await userDoc.correctOtp(otp, userDoc.otp))) {
+
+  if (!(await bcrypt.compare(otp.toString(), userDoc.otp))) {
     res.status(400).json({
       status: "error",
       message: "Incorrect OTP.",
@@ -174,10 +207,18 @@ exports.verifyOTP = async (req, res, next) => {
 
 // Forgot password
 exports.forgotPassword = async (req, res, next) => {
+  // validation Check
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      status: "error",
+      message: errors.array()[0].msg,
+    });
+  }
   // 1. Get user email
-  const { bodyEmail } = req.body;
+  const { email } = req.body;
   // find the user
-  const userDoc = await User.findOne({ email: bodyEmail });
+  const userDoc = await User.findOne({ email: email });
   // check wether account exist or not
   if (!userDoc) {
     res.status(400).json({
@@ -188,9 +229,19 @@ exports.forgotPassword = async (req, res, next) => {
   }
 
   // 2. After finding the user generate the random reset code
-  const reset_token = userDoc.createResetToken();
+
+  const reset_token = await crypto.randomBytes(32).toString("hex"); // -> Create reset password token.
+  userDoc.passwordResetToken = crypto
+    .createHash("sha256")
+    .update(reset_token)
+    .digest("hex");
+  userDoc.passwordResetExpires = Date.now() + 3 * 60 * 1000; // 3 minutes expiry time;
 
   const resetURL = `https://tawk.com/auth/reset-password/?code=${reset_token}`;
+
+  await userDoc.save({ new: true, validateModifiedOnly: true });
+
+  console.log(`code=${reset_token}`);
 
   try {
     // TODO => send email with reset URL
@@ -215,11 +266,30 @@ exports.forgotPassword = async (req, res, next) => {
 
 // Reset password
 exports.resetPassword = async (req, res, next) => {
-  const { password, confirmPassword } = req.body;
-  // 1. Find the user based on token
+  // validation Check
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      status: "error",
+      message: errors.array()[0].msg,
+    });
+  }
+
+  const { newPassword, confirmPassword, resetToken } = req.body;
+
+  // 1. Password Same validation
+  if (newPassword !== confirmPassword) {
+    res.status(400).json({
+      status: "error",
+      message: "Confirm Password didn't matched.",
+    });
+    return;
+  }
+
+  // 2. Find the user based on token
   const hashedToken = crypto
     .createHash("sha256")
-    .update(req.params.token)
+    .update(resetToken)
     .digest("hex");
 
   const userDoc = await User.findOne({
@@ -227,7 +297,7 @@ exports.resetPassword = async (req, res, next) => {
     passwordResetExpires: { $gt: Date.now() },
   });
 
-  // 2. If token is expired or token is incorrect.
+  // 3. If token is expired or token is incorrect.
   if (!userDoc) {
     res.status(400).json({
       status: "error",
@@ -236,9 +306,9 @@ exports.resetPassword = async (req, res, next) => {
     return;
   }
 
-  // 3. If all thing good - update keys.
-  userDoc.password = password;
-  userDoc.passwordConfirm = confirmPassword;
+  // 4. If all thing good - update keys.
+  (userDoc.password = await bcrypt.hash(newPassword, 12)), // Hash the Password at cost of 12;
+    (userDoc.passwordConfirm = await bcrypt.hash(confirmPassword, 12)); // Hash the C-Password at cost of 12
   userDoc.passwordResetToken = undefined;
   userDoc.passwordResetExpires = undefined;
   userDoc.passwordChangedAt = Date.now();
@@ -246,10 +316,10 @@ exports.resetPassword = async (req, res, next) => {
   // Save the changes
   await userDoc.save({ new: true, validateModifiedOnly: true });
 
-  // 4. Send a notification via user email.
+  // 5. Send a notification via user email.
   // TODO -> send email
 
-  // 5. Send the response to user
+  // 6. Send the response to user
   const token = signToken(userDoc._id);
   res.status(200).json({
     status: "success",

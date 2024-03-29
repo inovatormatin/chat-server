@@ -17,6 +17,7 @@ const userSchema = new mongoose.Schema({
   email: {
     type: String,
     required: [true, "email is required."],
+    unique: true,
     validate: {
       validator: function (email) {
         return String(email)
@@ -30,6 +31,7 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
+    required: [true, "Password is required"],
   },
   passwordConfirm: {
     type: String,
@@ -63,26 +65,6 @@ const userSchema = new mongoose.Schema({
   },
 });
 
-// Mongoose Hooks
-userSchema.pre("save", async function (next) {
-  // Run this condition when there is change in OTP other wise pass to next controller.
-  if (this.isModified("otp")) {
-    // Hash the OTP at cost of 12.
-    this.otp = await bcrypt.hash(this.otp, 12);
-    console.log("here:", this.otp);
-  }
-  next();
-}); // bcrypt OTP.
-
-userSchema.pre("save", async function (next) {
-  // Run this condition when there is change in password other wise pass to next controller.
-  if (this.isModified("password")) {
-    // Hash the password at cost of 12.
-    this.password = await bcrypt.hash(this.password, 12);
-  }
-  next();
-}); // bcrypt password.
-
 // methods are basically function which can access property from the provided schema.
 
 // -> compair password
@@ -91,23 +73,6 @@ userSchema.methods.correctPassword = async function (
   userPassword
 ) {
   return await bcrypt.compare(candidatePassword, userPassword);
-};
-
-// -> compair otp
-userSchema.methods.correctOtp = async function (candidateOtp, userOtp) {
-  return await bcrypt.compare(candidateOtp, userOtp);
-};
-
-// -> Create reset password token.
-userSchema.methods.createResetToken = async function () {
-  const resetToken = crypto.randomBytes(32).toString("hex");
-  this.passwordResetToken = crypto
-    .createHash("sha256")
-    .update(resetToken)
-    .digest("hex");
-
-  this.passwordResetExpires = Date.now() + 3 * 60 * 1000; // 3 minutes expiry time
-  return resetToken;
 };
 
 // -> Check if user updated password after issuing the token.
