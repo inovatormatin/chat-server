@@ -128,6 +128,7 @@ exports.sendOTP = async (req, res, next) => {
     specialChars: false,
   });
 
+  console.log(new_otp)
   const otp_expiry_time = Date.now() + 3 * 60 * 1000; // 3 minutes expiry time
 
   const userDoc = await User.findByIdAndUpdate(userId, {
@@ -358,6 +359,8 @@ exports.protect = async (req, res, next) => {
     });
     return;
   }
+
+  // TODO -> add a expiry time on tokken.
 
   // 4. Check if user changed thier password after token was issued.
   if (userDoc.changedPasswordAfter(decode.iat)) {

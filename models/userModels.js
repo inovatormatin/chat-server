@@ -63,6 +63,15 @@ const userSchema = new mongoose.Schema({
   otp_expiry_time: {
     type: Date,
   },
+  socket_id: {
+    type: String,
+  },
+  friends: [
+    {
+      type: mongoose.Schema.ObjectId,
+      ref: "User",
+    },
+  ],
 });
 
 // methods are basically function which can access property from the provided schema.
