@@ -72,6 +72,10 @@ const userSchema = new mongoose.Schema({
       ref: "User",
     },
   ],
+  status: {
+    type: String,
+    enum: ["Online", "Offline"],
+  },
 });
 
 // methods are basically function which can access property from the provided schema.

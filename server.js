@@ -48,7 +48,7 @@ io.on("connection", async (socket) => {
   const socket_id = socket.id;
   console.log(`User connected ${socket_id}`);
   if (Boolean(user_id)) {
-    await User.findByIdAndUpdate(user_id, { socket_id });
+    await User.findByIdAndUpdate(user_id, { socket_id, status: "Online" });
   }
   // Socket event listeners.
 
@@ -107,7 +107,10 @@ io.on("connection", async (socket) => {
   });
 
   // -> closing the connection for this particular scoket
-  socket.on("end", () => {
+  socket.on("end", async (data) => {
+    if (data.user_id) {
+      await User.findByIdAndUpdate(data.user_id, { status: "Offline" });
+    }
     console.log("Closing connection");
     socket.disconnect(0);
   });
@@ -119,7 +122,7 @@ server.listen(port, () => {
   console.log(`App is running on port: ${port}`);
 });
 
-process.on("unhandledRejection", (err) => {
+process.on("unhandledRejection", async (err) => {
   console.log(err);
   process.close(() => {
     process.exit(1); // exit the node process
