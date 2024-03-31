@@ -1,6 +1,6 @@
 const router = require("express").Router();
 const { protect } = require("../controllers/auth");
-const { getUsers, updateMe, getFriends } = require("../controllers/user");
+const { getUsers, updateMe, getFriends, getFriendsRequest } = require("../controllers/user");
 
 router.patch("/update-me", protect, updateMe);
 router.get("/get-users", protect, getUsers);

@@ -4,6 +4,7 @@ const dotenv = require("dotenv");
 const mongoose = require("mongoose");
 const { Server } = require("socket.io");
 const User = require("./models/userModels");
+const FriendRequest = require("./models/friendRequest");
 
 // configure
 dotenv.config({
@@ -41,22 +42,74 @@ const io = new Server(server, {
 
 // Listen for socket.io connection
 io.on("connection", async (socket) => {
+  // console.log(JSON.stringify(socket.handshake.query())); // to see what kind of data we are getting.
   //  this will run whenever client side try to connect with our server.
   const user_id = socket.handshake.query["user_id"]; // we can receive many data in query
   const socket_id = socket.id;
   console.log(`User connected ${socket_id}`);
-  if (user_id) {
+  if (Boolean(user_id)) {
     await User.findByIdAndUpdate(user_id, { socket_id });
   }
   // Socket event listeners.
-  socket.on("friend_request", async (data) => {
-    console.log(data.to);
-    // here data : {to : "user id to whom i want to send the friend request."}
-    const to = await User.findById(data.to); // taking out that user from DB to whom i want to send request.
-    // TODO => Create Friend request
-    io.to(to.socket_id).emit("new_friend_request", {
 
+  // -> on sending friend request
+  socket.on("friend_request", async (data) => {
+    // console.log(data.to);
+    // here data : {
+    //  to : "user id to whom we want to send the friend request.",
+    //  from : "user id from whom we got the friend request"
+    // }
+    const to_user = await User.findById(data.to).select("socket_id");
+    const from_user = await User.findById(data.from).select("socket_id"); // taking out user socket ID .
+    await FriendRequest.create({
+      sender: from_user,
+      recipient: to_user,
+    }); // Create Friend request
+
+    // => Emiting the events
+    io.to(to_user.socket_id).emit("new_friend_request", {
+      message: "New friend request recieved.",
+    }); // emit event => new_friend_request
+    io.to(from_user.socket_id).emit("request_sent", {
+      message: "Friend request sent.",
+    }); // emit event => request_sent
+  });
+
+  // -> on accepting friend request
+  socket.on("accept_request", async (data) => {
+    // console.log(data);
+    // here data : {
+    //  request_id : "Getting friend request id to get sender and reciever."
+    // }
+
+    const request_doc = await FriendRequest.findById(data.request_id); // request doc
+    const sender = await User.findById(request_doc.sender); // Sender doc
+    const reciever = await User.findById(request_doc.recipient); // Receiver doc
+
+    // Adding both of them in their friend list
+    sender.friends.push(reciever);
+    reciever.friends.push(sender);
+
+    // Saving Document in DB
+    await sender.save({ new: true, validateModifiedOnly: true });
+    await reciever.save({ new: true, validateModifiedOnly: true });
+
+    // Remove the request from DB
+    await FriendRequest.findByIdAndDelete(data.request_id);
+
+    // => Emiting events
+    io.to(sender.socket_id).emit("request_accepted", {
+      message: "Friend request accepted",
     });
+    io.to(reciever.socket_id).emit("request_accepted", {
+      message: "Friend request accepted",
+    });
+  });
+
+  // -> closing the connection for this particular scoket
+  socket.on("end", () => {
+    console.log("Closing connection");
+    socket.disconnect(0);
   });
 });
 

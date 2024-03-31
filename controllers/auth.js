@@ -107,6 +107,7 @@ exports.login = async (req, res, next) => {
     status: "success",
     message: "Login successfully.",
     token: token,
+    user_id: userDoc._id
   });
   return;
 };
@@ -128,7 +129,7 @@ exports.sendOTP = async (req, res, next) => {
     specialChars: false,
   });
 
-  console.log(new_otp)
+  console.log(new_otp);
   const otp_expiry_time = Date.now() + 3 * 60 * 1000; // 3 minutes expiry time
 
   const userDoc = await User.findByIdAndUpdate(userId, {
@@ -163,7 +164,7 @@ exports.verifyOTP = async (req, res, next) => {
       message: errors.array()[0].msg,
     });
   }
-  
+
   const { email, otp } = req.body;
 
   const userDoc = await User.findOne({
@@ -202,6 +203,7 @@ exports.verifyOTP = async (req, res, next) => {
     status: "success",
     message: "OTP verified.",
     token: token,
+    user_id: userDoc._id
   });
   return;
 };
@@ -361,15 +363,16 @@ exports.protect = async (req, res, next) => {
   }
 
   // TODO -> add a expiry time on tokken.
-
+  const iat = new Date(decode.iat * 1000); // convert seconds to milliseconds
   // 4. Check if user changed thier password after token was issued.
-  if (userDoc.changedPasswordAfter(decode.iat)) {
+
+  if (iat < userDoc.passwordChangedAt) {
     res.status(400).json({
       status: "error",
       message: "User recently updated password, Please login again.",
     });
     return;
-  }
+  } // -> Check if user updated password after issuing the token.
 
   // If everything is fine - pass to next middleware
   req.userDoc = userDoc;

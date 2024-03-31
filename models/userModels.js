@@ -84,10 +84,5 @@ userSchema.methods.correctPassword = async function (
   return await bcrypt.compare(candidatePassword, userPassword);
 };
 
-// -> Check if user updated password after issuing the token.
-userSchema.methods.changedPasswordAfter = async function (timeStamp) {
-  return timeStamp < this.passwordChangedAt;
-};
-
 const User = new mongoose.model("User", userSchema);
 module.exports = User;
