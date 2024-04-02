@@ -6,6 +6,7 @@ const User = require("../models/userModels");
 const { promisify } = require("util");
 const bcrypt = require("bcryptjs");
 const { validationResult } = require("express-validator");
+const sendMail = require("../services/mailer");
 
 const signToken = (userId) => jwt.sign({ userId }, process.env.JWT_SECRET);
 
@@ -107,7 +108,7 @@ exports.login = async (req, res, next) => {
     status: "success",
     message: "Login successfully.",
     token: token,
-    user_id: userDoc._id
+    user_id: userDoc._id,
   });
   return;
 };
@@ -129,7 +130,6 @@ exports.sendOTP = async (req, res, next) => {
     specialChars: false,
   });
 
-  console.log(new_otp);
   const otp_expiry_time = Date.now() + 3 * 60 * 1000; // 3 minutes expiry time
 
   const userDoc = await User.findByIdAndUpdate(userId, {
@@ -138,6 +138,10 @@ exports.sendOTP = async (req, res, next) => {
   });
 
   // TODO - Send Email
+  sendMail(userDoc.email, "Friendly - OTP for verification.", "new_otp", {
+    new_otp,
+    userName: userDoc.firstName + " " + userDoc.lastName,
+  });
 
   if (userDoc) {
     res.status(200).json({
@@ -203,7 +207,7 @@ exports.verifyOTP = async (req, res, next) => {
     status: "success",
     message: "OTP verified.",
     token: token,
-    user_id: userDoc._id
+    user_id: userDoc._id,
   });
   return;
 };
@@ -244,16 +248,21 @@ exports.forgotPassword = async (req, res, next) => {
 
   await userDoc.save({ new: true, validateModifiedOnly: true });
 
-  console.log(`code=${reset_token}`);
+  // console.log(`code=${reset_token}`);
 
   try {
-    // TODO => send email with reset URL
+    // send email with reset URL
+    sendMail(userDoc.email, "Reset your password.", "reset_password", {
+      resetURL,
+      userName: userDoc.firstName + " " + userDoc.lastName,
+    });
     res.status(200).json({
       status: "success",
       message: "Reset password link send to your email address.",
     });
     return;
   } catch (error) {
+    console.log(error);
     userDoc.passwordResetToken = undefined;
     userDoc.passwordResetExpires = undefined;
 
