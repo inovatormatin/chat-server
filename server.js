@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
 const { Server } = require("socket.io");
 const User = require("./models/userModels");
 const FriendRequest = require("./models/friendRequest");
+const path = require("path");
 
 // configure
 dotenv.config({
@@ -106,11 +107,50 @@ io.on("connection", async (socket) => {
     });
   });
 
+  // -> Handle text/link message
+  socket.on("text_message", async (data) => {
+    console.log("Received message", data);
+
+    // data: {to, from, text}
+
+    // create new conversation  if it doesn't exist yet or add new message to message list.
+
+    // will be saving that data to DB
+
+    // emit event incoming_message -> to user
+    // emit event outgoing_message -> from user
+  });
+
+  // -> Handle media/document message
+  socket.io("file_message", async (data) => {
+    console.log("Received message", data);
+
+    // data: {to, from, text, file}
+
+    // get the file extension
+    const fileExtension = path.extname(data.file.name);
+
+    // generate a unique name
+    const fileName = `${Date.now()}_${Math.floor(
+      Math.random() * 10000
+    )}${fileExtension}`;
+
+    // Upload file to AWS s3
+
+    // create new conversation  if it doesn't exist yet or add new message to message list.
+
+    // will be saving that data to DB
+
+    // emit event incoming_message -> to user
+    // emit event outgoing_message -> from user
+  });
+
   // -> closing the connection for this particular scoket
   socket.on("end", async (data) => {
     if (data.user_id) {
       await User.findByIdAndUpdate(data.user_id, { status: "Offline" });
     }
+    // broadcast user_disconnect
     console.log("Closing connection");
     socket.disconnect(0);
   });
