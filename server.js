@@ -43,7 +43,8 @@ const io = new Server(server, {
 
 // Listen for socket.io connection
 io.on("connection", async (socket) => {
-  // console.log(JSON.stringify(socket.handshake.query())); // to see what kind of data we are getting.
+  console.log("here");
+  console.log(JSON.stringify(socket.handshake.query())); // to see what kind of data we are getting.
   //  this will run whenever client side try to connect with our server.
   const user_id = socket.handshake.query["user_id"]; // we can receive many data in query
   const socket_id = socket.id;
@@ -55,7 +56,7 @@ io.on("connection", async (socket) => {
 
   // -> on sending friend request
   socket.on("friend_request", async (data) => {
-    // console.log(data.to);
+    console.log(data.to);
     // here data : {
     //  to : "user id to whom we want to send the friend request.",
     //  from : "user id from whom we got the friend request"
