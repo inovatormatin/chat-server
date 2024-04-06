@@ -6,6 +6,7 @@ const { Server } = require("socket.io");
 const User = require("./models/userModels");
 const FriendRequest = require("./models/friendRequest");
 const path = require("path");
+const OneToOneMessage = require("./models/OneToOneMessage");
 
 // configure
 dotenv.config({
@@ -43,8 +44,7 @@ const io = new Server(server, {
 
 // Listen for socket.io connection
 io.on("connection", async (socket) => {
-  console.log("here");
-  console.log(JSON.stringify(socket.handshake.query())); // to see what kind of data we are getting.
+  console.log(JSON.stringify(socket.handshake.query)); // to see what kind of data we are getting.
   //  this will run whenever client side try to connect with our server.
   const user_id = socket.handshake.query["user_id"]; // we can receive many data in query
   const socket_id = socket.id;
@@ -108,6 +108,19 @@ io.on("connection", async (socket) => {
     });
   });
 
+  // -> to get all user to whom client chatted. 
+  socket.on("get_direct_conversations", async ({ user_id }, callback) => {
+    const exisiting_conversation = await OneToOneMessage.find({
+      participants: { $all: [user_id] },
+    }).populate("participants", "firstName, lastName, _id email status");
+    
+    console.log(exisiting_conversation);
+    
+    // there will be callback function we will get back from frontend
+    callback(exisiting_conversation)
+  });
+
+
   // -> Handle text/link message
   socket.on("text_message", async (data) => {
     console.log("Received message", data);
@@ -123,7 +136,7 @@ io.on("connection", async (socket) => {
   });
 
   // -> Handle media/document message
-  socket.io("file_message", async (data) => {
+  socket.on("file_message", async (data) => {
     console.log("Received message", data);
 
     // data: {to, from, text, file}
@@ -163,9 +176,7 @@ server.listen(port, () => {
   console.log(`App is running on port: ${port}`);
 });
 
+
 process.on("unhandledRejection", async (err) => {
   console.log(err);
-  process.close(() => {
-    process.exit(1); // exit the node process
-  }); // we are going to close our server after getting un handled rejection.
 });
