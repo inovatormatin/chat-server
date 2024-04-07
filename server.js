@@ -108,18 +108,50 @@ io.on("connection", async (socket) => {
     });
   });
 
-  // -> to get all user to whom client chatted. 
+  // -> to get all user to whom client chatted.
   socket.on("get_direct_conversations", async ({ user_id }, callback) => {
     const exisiting_conversation = await OneToOneMessage.find({
       participants: { $all: [user_id] },
     }).populate("participants", "firstName, lastName, _id email status");
-    
-    console.log(exisiting_conversation);
-    
+
+    console.log("exisiting_conversation", exisiting_conversation);
+
     // there will be callback function we will get back from frontend
-    callback(exisiting_conversation)
+    callback(exisiting_conversation);
   });
 
+  // -> start new convesation
+  socket.on("start_conversation", async (data) => {
+    // data: { to, from } ;
+    const { to, from } = data;
+    // check if there is an existing convesation between from and to
+    const exisiting_conversation = await OneToOneMessage.find({
+      participants: { $size: 2, $all: [to, from] },
+      // condition = where participants have
+      // only two ids, and they must be
+      // to and from
+    }).populate("participants", "firstName lastName _id email status");
+    console.log("exisiting_conversation", exisiting_conversation[0]);
+
+    // if there is no exisiting conversation
+    if (exisiting_conversation.length === 0) {
+      let new_chat = await OneToOneMessage.create({
+        participants: [to, from],
+      });
+
+      new_chat = await OneToOneMessage.findById(new_chat._id).populate(
+        "participants",
+        "firstName lastName _id email status"
+      );
+
+      console.log("new_chat", new_chat);
+      socket.emit("start_chat", new_chat);
+    }
+    // if there is exisiting conversation
+    else {
+      socket.emit("open_chat", exisiting_conversation[0]);
+    }
+  });
 
   // -> Handle text/link message
   socket.on("text_message", async (data) => {
@@ -175,7 +207,6 @@ const port = process.env.PORT || 8000;
 server.listen(port, () => {
   console.log(`App is running on port: ${port}`);
 });
-
 
 process.on("unhandledRejection", async (err) => {
   console.log(err);
