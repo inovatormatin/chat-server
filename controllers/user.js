@@ -1,5 +1,5 @@
 const User = require("../models/userModels");
-const FriendRequest = require("../models/friendRequest");
+const Synergy = require("../models/synergyModel");
 const { filterObject } = require("../utils/filterObj");
 
 // to update user info
@@ -24,19 +24,73 @@ exports.updateMe = async (req, res, next) => {
   });
 };
 
-//
+// get all user for explore section.
 exports.getUsers = async (req, res, next) => {
-  const all_users = await User.find({ verified: true }).select(
-    "firstName lastName _id"
-  ); // taking all all verified user.
   const this_user = req.userDoc; // user who made the request
-  const remaining_users = all_users.filter(
-    (user) =>
-      !this_user.friends.includes(user._id) &&
-      user._id.toString() !== this_user._id.toString()
-  ); // filtering users who are not in friend list. And make sure to exclude requested user.
 
-  if (!remaining_users) {
+  const user_friends_list = await Synergy.find({
+    sender: this_user._id,
+    synergy_status: "friend",
+  })
+    .distinct("recipient")
+    .lean(); // get friend list
+
+  const user_friends_request_sent = await Synergy.find({
+    sender: this_user._id,
+    synergy_status: "pending",
+  })
+    .distinct("recipient")
+    .lean(); // get pending friend req.
+
+  const user_friends_request_received = await Synergy.find({
+    recipient: this_user._id,
+    synergy_status: "pending",
+  })
+    .distinct("sender")
+    .lean(); // get received friend req.
+
+  const user_blocked_list = await Synergy.find({
+    sender: this_user._id,
+    synergy_status: "blocked",
+  })
+    .distinct("recipient")
+    .lean(); // get blocked user.
+
+  const dont_include = [
+    this_user._id,
+    ...user_friends_list,
+    ...user_blocked_list,
+  ]; // combine array of user id to filter out.
+
+  const users_list = await User.aggregate([
+    {
+      $match: { verified: true, _id: { $nin: dont_include } }, // Match verified users and Exclude users in pendingUsers list
+    },
+    {
+      $project: { firstName: 1, lastName: 1, status: 1, _id: 1 }, // Project only necessary fields
+    },
+    {
+      $addFields: {
+        synergy_status: {
+          $switch: {
+            branches: [
+              {
+                case: { $in: ["$_id", user_friends_request_sent] },
+                then: "sent",
+              },
+              {
+                case: { $in: ["$_id", user_friends_request_received] },
+                then: "received",
+              },
+            ],
+            default: "unknown", // Default value if none of the conditions match
+          },
+        },
+      },
+    },
+  ]);
+
+  if (!users_list) {
     res.status(400).json({
       status: "error",
       message: "Internal server error.",
@@ -47,20 +101,42 @@ exports.getUsers = async (req, res, next) => {
   res.status(200).json({
     status: "success",
     message: "List of users those are not in friend list.",
-    data: remaining_users,
+    data: users_list,
   });
 };
 
-// Get friends list
+// Get friends list.
 exports.getFriends = async (req, res, next) => {
-  const {userDoc} = req; // user who made the request.
-  const this_user = await User.findById(userDoc._id).populate(
-    "friends",
-    "_id firstName lastName"
-  ); // Getting friend list and taking out only required data.
-  
+  const this_user = req.userDoc; // user who made the request.
+  const user_friends_list = await Synergy.aggregate([
+    {
+      $match: {
+        sender: this_user._id,
+        synergy_status: "friend",
+      },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "recipient",
+        foreignField: "_id",
+        as: "recipient",
+      },
+    },
+    {
+      $unwind: "$recipient",
+    },
+    {
+      $project: {
+        _id: "$recipient._id",
+        firstName: "$recipient.firstName",
+        lastName: "$recipient.lastName",
+        status: "$recipient.status",
+      },
+    },
+  ]);
 
-  if (!this_user) {
+  if (!user_friends_list) {
     res.status(400).json({
       status: "error",
       message: "Internal server error.",
@@ -71,19 +147,42 @@ exports.getFriends = async (req, res, next) => {
   res.status(200).json({
     status: "success",
     message: "Users friend list.",
-    data: this_user.friends,
+    data: user_friends_list,
   });
 };
 
-// Get friend requests
+// Get friend requests.
 exports.getFriendsRequest = async (req, res, next) => {
-  const user = req.userDoc; // user who made the request.
-  const friend_request = await FriendRequest.find({ recipient: user._id }).populate(
-    "sender",
-    "firstName lastName _id"
-  ); // finding friend req corresponding to the user.
+  const this_user = req.userDoc; // user who made the request.
+  const user_friends_request = await Synergy.aggregate([
+    {
+      $match: {
+        recipient: this_user._id,
+        synergy_status: "pending",
+      },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "sender",
+        foreignField: "_id",
+        as: "sender",
+      },
+    },
+    {
+      $unwind: "$sender",
+    },
+    {
+      $project: {
+        _id: "$sender._id",
+        firstName: "$sender.firstName",
+        lastName: "$sender.lastName",
+        status: "$sender.status",
+      },
+    },
+  ]);
 
-  if (!friend_request) {
+  if (!user_friends_request) {
     res.status(400).json({
       status: "error",
       message: "Internal server error.",
@@ -94,6 +193,6 @@ exports.getFriendsRequest = async (req, res, next) => {
   res.status(200).json({
     status: "success",
     message: "Users friend's request.",
-    data: friend_request,
+    data: user_friends_request,
   });
 };

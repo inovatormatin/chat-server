@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
+const { array } = require("joi");
 
 const userSchema = new mongoose.Schema({
   firstName: {
@@ -66,12 +67,6 @@ const userSchema = new mongoose.Schema({
   socket_id: {
     type: String,
   },
-  friends: [
-    {
-      type: mongoose.Schema.ObjectId,
-      ref: "User",
-    },
-  ],
   status: {
     type: String,
     enum: ["Online", "Offline"],

@@ -137,6 +137,9 @@ exports.sendOTP = async (req, res, next) => {
     otp_expiry_time: otp_expiry_time,
   });
 
+  // for development
+  console.log(new_otp);
+
   // TODO - Send Email
   sendMail(userDoc.email, "Friendly - OTP for verification.", "new_otp", {
     new_otp,
