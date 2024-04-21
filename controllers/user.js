@@ -28,12 +28,21 @@ exports.updateMe = async (req, res, next) => {
 exports.getUsers = async (req, res, next) => {
   const this_user = req.userDoc; // user who made the request
 
-  const user_friends_list = await Synergy.find({
-    sender: this_user._id,
+  let user_friends_list = await Synergy.find({
+    $or: [{ sender: this_user._id }, { recipient: this_user._id }],
     synergy_status: "friend",
   })
-    .distinct("recipient")
-    .lean(); // get friend list
+    .select("recipient sender -_id")
+    .lean();
+
+  user_friends_list = await user_friends_list.reduce((acc, obj) => {
+    if (obj.sender.toString() !== this_user._id.toString()) {
+      acc.push(obj.sender);
+    } else if (obj.recipient.toString() !== this_user._id.toString()) {
+      acc.push(obj.recipient);
+    }
+    return acc;
+  }, []);
 
   const user_friends_request_sent = await Synergy.find({
     sender: this_user._id,
@@ -111,27 +120,38 @@ exports.getFriends = async (req, res, next) => {
   const user_friends_list = await Synergy.aggregate([
     {
       $match: {
-        sender: this_user._id,
+        $or: [{ sender: this_user._id }, { recipient: this_user._id }],
         synergy_status: "friend",
+      },
+    },
+    {
+      $addFields: {
+        friendData: {
+          $cond: {
+            if: { $eq: ["$sender", this_user._id] },
+            then: "$recipient",
+            else: "$sender",
+          },
+        },
       },
     },
     {
       $lookup: {
         from: "users",
-        localField: "recipient",
+        localField: "friendData",
         foreignField: "_id",
-        as: "recipient",
+        as: "friendDetails",
       },
     },
     {
-      $unwind: "$recipient",
+      $unwind: "$friendDetails",
     },
     {
       $project: {
-        _id: "$recipient._id",
-        firstName: "$recipient.firstName",
-        lastName: "$recipient.lastName",
-        status: "$recipient.status",
+        _id: "$friendDetails._id",
+        firstName: "$friendDetails.firstName",
+        lastName: "$friendDetails.lastName",
+        status: "$friendDetails.status",
       },
     },
   ]);
