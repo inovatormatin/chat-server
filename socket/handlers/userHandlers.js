@@ -1,19 +1,8 @@
 const OneToOneMessage = require("../../models/OneToOneMessage");
-const FriendRequest = require("../../models/friendRequest");
 const Synergy = require("../../models/synergyModel");
 const User = require("../../models/userModels");
 
 module.exports = (socket, io, user_id) => {
-  // -> to get all user to whom client chatted.
-  const getAllConversation = async ({ user_id }, callback) => {
-    const exisiting_conversation = await OneToOneMessage.find({
-      participants: { $all: [user_id] },
-    }).populate("participants", "firstName, lastName, _id email status");
-    callback(exisiting_conversation); // return data to client.
-  };
-  socket.on("user:get_all_conversation", getAllConversation);
-  // -------------------------------------------------------------------- //
-
   // -> to send friend request
   const sendFriendRequest = async ({ sender_id, receiver_id }) => {
     const sender = await User.findById(sender_id);
@@ -79,7 +68,6 @@ module.exports = (socket, io, user_id) => {
       sender: receiver_id,
       synergy_status: "pending",
     }); // find friend request in DB
-    console.log(friend_request);
     if (friend_request) {
       // update synergy status
       friend_request.synergy_status = "friend";

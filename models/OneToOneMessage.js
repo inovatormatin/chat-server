@@ -28,11 +28,23 @@ const OneToOneMessageSchema = new mongoose.Schema({
       text: {
         type: String,
       },
-      file: {
+      attachment: {
         type: String,
       },
     },
   ],
+  pinned: {
+    type: Boolean,
+    default: false,
+  },
+  lastMessage: {
+    text: { type: String, default: "" },
+    seen: { type: Boolean, default: false },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
 });
 
 const OneToOneMessage = new mongoose.model(
