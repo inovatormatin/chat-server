@@ -17,7 +17,7 @@ module.exports = (socket, io, user_id) => {
   // -> to get one to one chat room id.
   const getOTOroomid = async ({ client_id, friend_id }, callback) => {
     const exisiting_conversation = await OneToOneMessage.findOne({
-      participants: { $eq: [client_id, friend_id] },
+      participants: { $all: [client_id, friend_id] },
     }).populate("participants", "firstName lastName _id email status");
 
     if (!exisiting_conversation) {
